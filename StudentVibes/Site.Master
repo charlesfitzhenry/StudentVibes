@@ -1,0 +1,547 @@
+﻿<%@ Master Language="C#" AutoEventWireup="true" CodeBehind="Site.master.cs" Inherits="StudentVibes.SiteMaster" %>
+
+<!DOCTYPE html>
+
+<html lang="en">
+<head runat="server">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%: Page.Title %> - Student Vibes</title>
+
+    <asp:PlaceHolder runat="server">
+        <%: Scripts.Render("~/bundles/modernizr") %>
+    </asp:PlaceHolder>
+    <webopt:BundleReference runat="server" Path="~/Content/css" />
+    <link href="~/favicon.ico" rel="shortcut icon" type="image/x-icon" />
+    <style>
+        html, body, #map-canvas {
+            height: 100%;
+            margin: 0px;
+            padding: 0px;
+        }
+    </style>
+    <link type="text/css" rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500">
+    <script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false&libraries=places"></script>
+    <script>
+        // This example displays an address form, using the autocomplete feature
+        // of the Google Places API to help users fill in the information.
+
+        var placeSearch, autocomplete;
+        var componentForm = {
+            street_number: 'short_name',
+            route: 'long_name',
+            locality: 'long_name',
+            administrative_area_level_1: 'short_name',
+            country: 'long_name',
+            postal_code: 'short_name'
+        };
+
+        function initialize() {
+            // Create the autocomplete object, restricting the search
+            // to geographical location types.
+            autocomplete = new google.maps.places.Autocomplete(
+                /** @type {HTMLInputElement} */(document.getElementById('autocomplete')),
+                { types: ['geocode'] });
+            // When the user selects an address from the dropdown,
+            // populate the address fields in the form.
+            google.maps.event.addListener(autocomplete, 'place_changed', function () {
+                fillInAddress();
+                calculateDistances();
+            });
+        }
+
+        // [START region_fillform]
+        function fillInAddress() {
+            // Get the place details from the autocomplete object.
+            var place = autocomplete.getPlace();
+
+            for (var component in componentForm) {
+                document.getElementById(component).value = '';
+                document.getElementById(component).disabled = true;
+            }
+
+            // Get each component of the address from the place details
+            // and fill the corresponding field on the form.
+            for (var i = 0; i < place.address_components.length; i++) {
+                var addressType = place.address_components[i].types[0];
+                if (componentForm[addressType]) {
+                    var val = place.address_components[i][componentForm[addressType]];
+                    document.getElementById(addressType).value = val;
+                }
+            }
+        }
+        // [END region_fillform]
+
+        // [START region_geolocation]
+        // Bias the autocomplete object to the user's geographical location,
+        // as supplied by the browser's 'navigator.geolocation' object.
+        function geolocate() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function (position) {
+                    var geolocation = new google.maps.LatLng(
+                        position.coords.latitude, position.coords.longitude);
+                    autocomplete.setBounds(new google.maps.LatLngBounds(geolocation,
+                        geolocation));
+                });
+            }
+        }
+        // [END region_geolocation]
+
+        var map;
+        var geocoder;
+        var bounds = new google.maps.LatLngBounds();
+        var markersArray = [];
+
+        var origin1 = '22 Main Rd, Cape Town, Western Cape';
+
+        var destinationA = '';
+
+
+        /* var origin1 = new google.maps.LatLng(55.930, -3.118);
+          var origin2 = 'Greenwich, England';
+          var destinationA = 'Stockholm, Sweden';
+          var destinationB = new google.maps.LatLng(50.087, 14.421);*/
+
+        var destinationIcon = 'https://chart.googleapis.com/chart?chst=d_map_pin_letter&chld=D|FF0000|000000';
+        var originIcon = 'https://chart.googleapis.com/chart?chst=d_map_pin_letter&chld=O|FFFF00|000000';
+
+        function calc() {
+
+            var DestA = document.getElementById("street_number").value + ", "
+                + document.getElementById("route").value + ", " +
+                document.getElementById("locality").value + ", " +
+                document.getElementById("administrative_area_level_1").value + ", " +
+                document.getElementById("postal_code").value + ", " +
+                document.getElementById("country").value;
+            destinationA = DestA;
+
+            return DestA;
+        }
+
+        function initializeD() {
+            var opts = {
+                center: new google.maps.LatLng(-33.956846, 18.461623),
+                zoom: 10
+            };
+            map = new google.maps.Map(document.getElementById('map-canvas'), opts);
+            geocoder = new google.maps.Geocoder();
+        }
+
+        function calculateDistances() {
+            var d = calc();
+            var service = new google.maps.DistanceMatrixService();
+            service.getDistanceMatrix(
+              {
+                  origins: [origin1],
+                  destinations: [d],
+                  travelMode: google.maps.TravelMode.DRIVING,
+                  unitSystem: google.maps.UnitSystem.METRIC,
+                  avoidHighways: false,
+                  avoidTolls: false
+              }, callback);
+        }
+
+        function callback(response, status) {
+            if (status != google.maps.DistanceMatrixStatus.OK) {
+                alert('Error was: ' + status);
+            } else {
+                var origins = response.originAddresses;
+                var destinations = response.destinationAddresses;
+                var outputDiv = document.getElementById('outputDiv');
+                outputDiv.innerHTML = '';
+                deleteOverlays();
+
+                for (var i = 0; i < origins.length; i++) {
+                    var results = response.rows[i].elements;
+                    addMarker(origins[i], false);
+                    for (var j = 0; j < results.length; j++) {
+                        addMarker(destinations[j], true);
+                        //outputDiv.innerHTML += origins[i] + ' to ' + destinations[j]
+                        // + ': ' + results[j].distance.text + ' in '
+                        // + results[j].duration.text + '<br>';
+                        var s = results[j].distance.text;
+                        s = s.slice(0, s.lastIndexOf(" "));
+                        if (s.length > 4) {
+                            s = s.slice(0, s.lastIndexOf(",")) + s.slice(s.lastIndexOf(",") + 1, s.length);
+                        }
+                        document.getElementById("MainContent_dist").value = s;
+                    }
+                }
+            }
+        }
+
+        function addMarker(location, isDestination) {
+            var icon;
+            if (isDestination) {
+                icon = destinationIcon;
+            } else {
+                icon = originIcon;
+            }
+            geocoder.geocode({ 'address': location }, function (results, status) {
+                if (status == google.maps.GeocoderStatus.OK) {
+                    bounds.extend(results[0].geometry.location);
+                    map.fitBounds(bounds);
+                    var marker = new google.maps.Marker({
+                        map: map,
+                        position: results[0].geometry.location,
+                        icon: icon
+                    });
+                    markersArray.push(marker);
+                } else {
+                    alert('Geocode was not successful for the following reason: '
+                      + status);
+                }
+            });
+        }
+
+        function deleteOverlays() {
+            for (var i = 0; i < markersArray.length; i++) {
+                markersArray[i].setMap(null);
+            }
+            markersArray = [];
+        }
+
+        google.maps.event.addDomListener(window, 'load', initialize);
+
+
+
+        var xmlhttp;
+        if (window.XMLHttpRequest) {// code for IE7+, Firefox, Chrome, Opera, Safari
+            xmlhttp = new XMLHttpRequest();
+        }
+        else {// code for IE6, IE5
+            xmlhttp = new ActiveXObject("Microsoft.XMLHTTP");
+        }
+
+
+    </script>
+
+    <style>
+        #locationField, #controls {
+            position: relative;
+            width: 480px;
+        }
+
+        #autocomplete {
+            position: absolute;
+            top: 0px;
+            left: 0px;
+            width: 99%;
+        }
+
+        .label {
+            text-align: right;
+            font-weight: bold;
+            width: 100px;
+            color: #303030;
+        }
+
+        #address {
+            border: 1px solid #000090;
+            background-color: #f0f0ff;
+            width: 480px;
+            padding-right: 2px;
+        }
+
+            #address td {
+                font-size: 10pt;
+            }
+
+        .field {
+            width: 99%;
+        }
+
+        .slimField {
+            width: 80px;
+        }
+
+        .wideField {
+            width: 200px;
+        }
+
+        #locationField {
+            height: 20px;
+            margin-bottom: 2px;
+        }
+    </style>
+
+</head>
+<body onload="initialize(); initializeD();" style="padding: 0px" id="body">
+    <form runat="server">
+        <asp:ScriptManager runat="server">
+            <Scripts>
+                <%--To learn more about bundling scripts in ScriptManager see http://go.microsoft.com/fwlink/?LinkID=301884 --%>
+                <%--Framework Scripts--%>
+                <asp:ScriptReference Name="MsAjaxBundle" />
+                <asp:ScriptReference Name="jquery" />
+                <asp:ScriptReference Name="bootstrap" />
+                <asp:ScriptReference Name="respond" />
+                <asp:ScriptReference Name="WebForms.js" Assembly="System.Web" Path="~/Scripts/WebForms/WebForms.js" />
+                <asp:ScriptReference Name="WebUIValidation.js" Assembly="System.Web" Path="~/Scripts/WebForms/WebUIValidation.js" />
+                <asp:ScriptReference Name="MenuStandards.js" Assembly="System.Web" Path="~/Scripts/WebForms/MenuStandards.js" />
+                <asp:ScriptReference Name="GridView.js" Assembly="System.Web" Path="~/Scripts/WebForms/GridView.js" />
+                <asp:ScriptReference Name="DetailsView.js" Assembly="System.Web" Path="~/Scripts/WebForms/DetailsView.js" />
+                <asp:ScriptReference Name="TreeView.js" Assembly="System.Web" Path="~/Scripts/WebForms/TreeView.js" />
+                <asp:ScriptReference Name="WebParts.js" Assembly="System.Web" Path="~/Scripts/WebForms/WebParts.js" />
+                <asp:ScriptReference Name="Focus.js" Assembly="System.Web" Path="~/Scripts/WebForms/Focus.js" />
+                <asp:ScriptReference Name="WebFormsBundle" />
+                <%--Site Scripts--%>
+            </Scripts>
+
+        </asp:ScriptManager>
+
+        <script type="text/javascript">
+            $(function () {
+                // Setup drop down menu
+                $('.dropdown-toggle').dropdown();
+
+                // Fix input element click problem
+                $('.dropdown input, .dropdown label').click(function (e) {
+                    e.stopPropagation();
+                });
+            });
+
+        </script>
+
+        <div class="navbar navbar-default navbar-static-top" role="navigation" style="min-height: 50px; margin-bottom: 0px;">
+            <div class="container" style="padding-top: 0px; padding-bottom: inherit;">
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                        <span class="sr-only">Toggle navigation</span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+                    <a class="navbar-brand" href="#">Student Vibes</a>
+                </div>
+                <div class="navbar-collapse collapse">
+                    <ul class="nav navbar-nav navbar-right">
+
+                        <!--SEARCH GOES HERE-->
+                        <!--http://www.codeproject.com/Articles/216966/jQuery-SearchBox-AutoComplete-Widget-->
+
+                        <li>
+                            <input type="text" placeholder="Search Products" class="form-control" style="margin-top: 10px; width: 300px">
+                        </li>
+                        <li>
+                            <button class="btn btn-default" type="button" style="margin-top: 10px;">Search</button>
+                        </li>
+
+
+                        <!-- UNABLE TO ADD THE ADMIN LINK!!! -->
+
+                        <li><a runat="server" href="~/">Home</a></li>
+                        <li><a runat="server" href="~/About">About</a></li>
+                        <li><a runat="server" href="~/Contact">Contact</a></li>
+
+                        <!--LOGIN/REGISTER-->
+                        <asp:LoginView ID="LogV" runat="server" ViewStateMode="Disabled">
+                            <AnonymousTemplate>
+                                <li class="dropdown pull-left">
+                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown"><i class="glyphicon glyphicon-user"></i>Login/Register <b class="caret"></b></a>
+                                    <ul class="dropdown-menu" style="padding: 15px; width: 250px">
+                                        <li>
+                                            <label>Existing Customer</label></li>
+                                        <li class="divider"></li>
+
+
+                                        <li>
+
+                                            <!-- INPUT FIELDS  -->
+
+                                            <div style="padding-bottom: 5px">
+                                                <asp:TextBox runat="server" ID="ExUserName" Placeholder="Email" CssClass="form-control" />
+                                            </div>
+
+                                            <div style="padding-bottom: 5px">
+                                                <asp:TextBox runat="server" ID="ExPassword" Placeholder="Password" TextMode="Password" CssClass="form-control" OnTextChanged="ExPassword_TextChanged">hello</asp:TextBox>
+                                            </div>
+                                            <div class="checkbox" style="padding-bottom: 5px">
+                                                <asp:CheckBox runat="server" ID="RememberMe" />
+                                                <asp:Label ID="Label1" runat="server" AssociatedControlID="RememberMe">Remember me?</asp:Label>
+
+                                            </div>
+                                            <asp:Button ID="Button3" runat="server" OnClick="ExLogin" Text="Log in" CssClass="btn btn-success btn-sm" Style="width: 218px" />
+
+                                        </li>
+
+
+                                        <li>
+                                            <li class="divider"></li>
+                                            <p>Use another service to log in</p>
+                                        </li>
+
+                                        <asp:Button ID="Button2" runat="server" Text="Log in with Google" CssClass="btn btn-primary btn-sm" Style="width: 218px" />
+                                </li>
+
+
+                                <br />
+                                <li class="divider" style="color: black"></li>
+                                <li>
+                                    <label>New Customer</label></li>
+                                <li class="divider"></li>
+
+                                <!--<input class="btn btn-primary" style="clear: left; width: 80%; height: 32px; font-size: 13px;" type="submit" name="commit" value="Register" />-->
+                                <li><a runat="server" href="~/Account/Register">Register</a></li>
+                                </ul>
+                                </li>
+                            </AnonymousTemplate>
+
+
+                            <LoggedInTemplate>
+                                <li class="dropdown pull-left">
+                                    <a href="#" class="dropdown-toggle" data-toggle="dropdown"><i class="glyphicon glyphicon-user"></i><%: Context.User.Identity.GetUserName() %> <b class="caret"></b></a>
+                                    <ul class="dropdown-menu" style="padding: 15px;">
+                                        <li>
+                                            <label>Manage your account</label></li>
+                                        <li class="divider"></li>
+
+                                        <li><a runat="server" href="~/Account/Manage" title="Manage your account">Account Settings</a></li>
+                                        <li>
+                                            <asp:LoginStatus runat="server" LogoutAction="Redirect" LogoutText="Log off" LogoutPageUrl="~/" OnLoggingOut="Unnamed_LoggingOut" />
+                                        </li>
+
+
+
+                                    </ul>
+                                </li>
+
+                            </LoggedInTemplate>
+                        </asp:LoginView>
+
+
+
+                    </ul>
+
+                </div>
+                <!--/.nav-collapse -->
+            </div>
+        </div>
+
+
+
+
+        <!-- <div class="navbar navbar-inverse navbar-fixed-top">
+  
+                <div class="navbar-header">
+                    <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                        <span class="icon-bar"></span>
+                    </button>
+
+                </div>
+
+
+                <div class="navbar-collapse collapse">
+                    <a class="navbar-brand" runat="server" href="~/">
+                        <img src="/Images/logo.jpg" /></a>
+                    <ul class="nav navbar-nav">
+
+                        <li><a runat="server" id="adminLink" visible="false"
+                            href="~/Admin/AdminPage">Admin</a></li>
+                        <li><a runat="server" href="~/">Home</a></li>
+                        <li><a runat="server" href="~/About">About</a></li>
+                        <li><a runat="server" href="~/Contact">Contact</a></li>
+                        <li><a runat="server" href="~/ProductList.aspx">Products</a></li>
+                        <li><a runat="server" href="~/ShoppingCart" id="cartCount">&nbsp;</a></li>
+                    </ul>
+                    <asp:LoginView runat="server" ViewStateMode="Disabled">
+                        <AnonymousTemplate>
+                            <ul class="nav navbar-nav navbar-right">
+                                <li><a runat="server" href="~/Account/Register">Register</a></li>
+                                <li><a runat="server" href="~/Account/Login">Log in</a></li>
+                            </ul>
+                        </AnonymousTemplate>
+                        <LoggedInTemplate>
+                            <ul class="nav navbar-nav navbar-right">
+                                <li><a runat="server" href="~/Account/Manage" title="Manage your account">Hello, <%: Context.User.Identity.GetUserName()  %> !</a></li>
+                                <li>
+                                    <asp:LoginStatus runat="server" LogoutAction="Redirect" LogoutText="Log off" LogoutPageUrl="~/" OnLoggingOut="Unnamed_LoggingOut" />
+                                </li>
+                            </ul>
+                        </LoggedInTemplate>
+                    </asp:LoginView>
+                </div>
+            
+        </div>
+        -->
+
+
+        <!--
+        <div id="TitleContent" style="text-align: center">
+            <a runat="server" href="~/">
+                <!--<asp:Image ID="Image1" runat="server" ImageUrl="~/Images/logo.jpg" BorderStyle="None" />-->
+        <!--</a>
+            <br />
+        </div>
+        -->
+
+
+        <div id="CategoryMenu" style="text-align: center">
+
+
+            <div class="navbar navbar-default navbar-static-top" role="navigation" style="margin-top: 0px; margin-bottom: 0px; z-index: 0;">
+                <div class="container" style="padding-top: 0px; padding-bottom: inherit;">
+
+                    <div class="navbar" style="margin-bottom: 0px;">
+                        <ul class="nav navbar-nav navbar-left">
+
+
+                            <asp:ListView ID="categoryList"
+                                ItemType="StudentVibes.Models.Category"
+                                runat="server"
+                                SelectMethod="GetCategories">
+                                <ItemTemplate>
+
+                                    <li class="dropdown">
+                                        <a href="#" class="dropdown-toggle" data-toggle="dropdown"><%#: Item.CategoryName %><b class="caret"></b></a>
+                                        <ul class="dropdown-menu">
+
+                                            <li>
+                                                <!--HERE WE NEED TO GENERATE GETROUTEURL FOR URL QUERY ?i=new-->
+                                                <a href="<%#: GetRouteUrl( "ProductsByCategoryRoute", new {categoryName= Item.CategoryName, itemStatus= "new"}) %>">New </a></li>
+                                            <li>
+                                                <!--HERE WE NEED TO GENERATE GETROUTEURL FOR URL QUERY ?i=used-->
+                                                <li><a href="<%#: GetRouteUrl( "ProductsByCategoryRoute", new {categoryName= Item.CategoryName, itemStatus= "used"}) %>">Used</a></li>
+                                            <li></li>
+
+                                        </ul>
+                                    </li>
+                                    
+                                </ItemTemplate>
+                                <ItemSeparatorTemplate></ItemSeparatorTemplate>
+                            </asp:ListView>
+
+
+
+                        </ul>
+
+                    </div>
+                    <!--/.nav-collapse -->
+                </div>
+            </div>
+
+
+
+        </div>
+        <div class="container body-content">
+            <asp:ContentPlaceHolder ID="MainContent" runat="server">
+            </asp:ContentPlaceHolder>
+            <footer>
+                <p>&copy; <%: DateTime.Now.Year %> - Student Vibes</p>
+                <hr />
+            </footer>
+        </div>
+    </form>
+
+
+
+
+
+    <p>
+        &nbsp;
+    </p>
+
+</body>
+</html>

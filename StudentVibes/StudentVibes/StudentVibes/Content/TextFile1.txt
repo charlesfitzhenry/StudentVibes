@@ -1,0 +1,5 @@
+﻿http://www.elevateweb.co.uk/image-zoom/examples
+http://www.starplugins.com/cloudzoom
+http://fancyapps.com/fancybox/
+http://www.webdesignrazzi.com/2014/jquery-zoom-effect-plugins/
+http://codecanyon.net/item/imagezoom-responsive-jquery-image-zoom-plugin/full_screen_preview/4805256?ref=janecross
